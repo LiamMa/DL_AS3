@@ -8,7 +8,7 @@ import os
 
 
 class trainer(object):
-    def __init__(self,model,train_loader,loss,valid_loader=None,path="",epochs=100,patience_level=5,filename="___"):
+    def __init__(self,model,P1,P2,loss,path="",epochs=100,patience_level=5,filename="___"):
         '''
         The trainer for ANT.
         Growth stage: train_growth()
@@ -22,10 +22,8 @@ class trainer(object):
         '''
         super(trainer,self).__init__()
         self.model = model
-        self.node_dict = model.node_dict
-        self.node_list = model.node_list
-        self.train_loader = train_loader
-        self.valid_loader = valid_loader
+        self.P1 = P1
+        self.P2 = P2
         self.path = path
         self.epochs = epochs
         self.patience_level = patience_level
@@ -77,12 +75,8 @@ class trainer(object):
 
         patience=self.patience_level
 
-        train_loader=self.train_loader
 
-        valid_loader=self.valid_loader
 
-        if self.valid_loader==None:
-            valid=False
 
         criterion=self.loss
 
@@ -104,89 +98,57 @@ class trainer(object):
             # ------------ Training ------------
             tic = time.time()
             model.train()
-            for batch_idx, (inputs, targets) in enumerate(train_loader):
-                if targets.size().__len__() > 1:
-                    if targets.size(1) == 1:
-                        targets = targets.flatten().type(torch.long)
-                if cuda_available:
-                    inputs, targets = inputs.to(device), targets.to(device)
-
-                optimizer.zero_grad()
-                inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
-                outputs1 = model.forward(inputs)
-                outputs2 = model.forward(targets)
-
-                loss = criterion(outputs1, outputs2)
-                loss.backward()
-                optimizer.step()
-
-                loss = loss.item()
-                losses.append(loss*inputs.size(0))
-                total += targets.size(0)
-
-                if batch_idx % 100 == 0:
-                    curr_loss = np.mean(losses)
-                    print('[Epoch %d - batch %d] loss=%f time: %f' % (epoch, batch_idx, curr_loss, time.time() - tic),end="\r")
 
 
-            train_loss = np.sum(losses)/total
 
-            train_losses_history.append(train_loss)
+            inputs=torch.Tensor(self.P1.__next__())
+            targets=torch.Tensor(self.P2.__next__())
+            assert inputs.size()==targets.size()
+
+
+            if cuda_available:
+                inputs, targets = inputs.to(device), targets.to(device)
+
+            optimizer.zero_grad()
+            inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+            outputs1 = model.forward(inputs)
+            outputs2 = model.forward(targets)
+
+            loss = criterion(outputs1, outputs2)
+            loss.backward()
+            optimizer.step()
+
+            loss = loss.item()
+            total += targets.size(0)
+
+
+            print('[Epoch %d - Training] before traine loss=%f time: %f' % (epoch, loss, time.time() - tic),end="\r")
+
+
+
+            train_losses_history.append(loss)
 
 
             # ------------ Validation ------------
             model.eval()
-            if valid:
-                total = 0
-                valid_loss=0
-                for batch_idx, (inputs, targets) in enumerate(valid_loader):
-                    if targets.size().__len__()>1:
-                        if targets.size(1)==1:
-                            targets = targets.flatten().type(torch.long)
-
-                    if cuda_available == True:
-                        inputs, targets = inputs.to(device), targets.to(device)
-
-                    inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
-                    outputs1 = model.forward(inputs)
-                    outputs2 = model.forward(targets)
-
-                    total += targets.size(0)
-                    valid_loss+=criterion(outputs1,outputs2).item()*targets.size(0)
-
-                valid_loss=valid_loss/total
-                valid_loss_history.append(valid_loss)
+            total = 0
+            valid_loss=0
 
 
-                print('[Epoch %d] train_loss=%f  val_loss=%f  time: %f ' %
-                      (epoch, train_loss, valid_loss, time.time() - tic))
+            inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+            outputs1 = model.forward(inputs)
+            outputs2 = model.forward(targets)
 
-            else:
-                total = 0
-                valid_loss = 0
-                for batch_idx, (inputs, targets) in enumerate(train_loader):
-                    if targets.size().__len__() > 1:
-                        if targets.size(1) == 1:
-                            targets = targets.flatten().type(torch.long)
+            total += targets.size(0)
+            valid_loss=criterion(outputs1,outputs2).item()*targets.size(0)
 
-                    if cuda_available == True:
-                        inputs, targets = inputs.to(device), targets.to(device)
-
-                    inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
-                    outputs1 = model.forward(inputs)
-                    outputs2 = model.forward(targets)
-
-                    total += targets.size(0)
-                    valid_loss += criterion(outputs1, outputs2).item() * targets.size(0)
+            valid_loss=valid_loss
+            valid_loss_history.append(valid_loss)
 
 
-                valid_loss = valid_loss / total
-                valid_loss_history.append(valid_loss)
+            print('[Epoch %d -- Trained] Valid__loss=%f  time: %f' %
+                  (epoch, valid_loss, time.time() - tic))
 
-                print('[Epoch %d] train_loss=%f  real_train_loss=%f  time: %f ' %
-                      (epoch, train_loss, valid_loss, time.time() - tic))
-
-            # TODO: Patience Module
 
 
 

@@ -14,7 +14,7 @@ from torch.nn.modules.loss import _Loss
 
 
 class MLP(nn.Module):
-    def __init__(self,input_size,output_size,layers=3,hidden_size=None,softmax=False):
+    def __init__(self,input_size,output_size,layers=3,hidden_size=None,softmax=True):
         '''
         :param input_size:  Input size
         :param output_size:  Output size
@@ -47,7 +47,10 @@ class MLP(nn.Module):
             self.MLP.add_module("layer_"+str(i),nn.Linear(sizes[i],sizes[i+1]))
 
         if self.softmax:
-            self.MLP.add_module("softmax",nn.Softmax(dim=-1))
+            if output_size==1:
+                self.MLP.add_module("sigmoid", nn.Sigmoid())
+            else:
+                self.MLP.add_module("softmax",nn.Softmax(dim=-1))
 
 
     def forward(self, input):
