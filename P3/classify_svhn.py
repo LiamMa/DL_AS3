@@ -80,20 +80,20 @@ class Classifier(nn.Module):
             nn.Dropout2d(p=0.1),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(128, 512, 2),
+            nn.Conv2d(128, 256, 2),
         )
 
         self.mlp = nn.Sequential(
             nn.ELU(),
             nn.Dropout(0.5),
-            nn.Linear(512, 10),
+            nn.Linear(256, 1),
         )
         # for p in self.parameters():
         #     if p.dim() > 1:
         #         nn.init.xavier_uniform_(p)
 
     def forward(self, x):
-        return self.mlp(self.extract_features(x))
+        return self.mlp(self.extract_features(x)).sigmoid()
 
     def extract_features(self, x):
         return self.conv_stack(x)[:, :, 0, 0]
