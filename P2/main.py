@@ -116,6 +116,7 @@ def evaluate_LLE(model, one_batch, K=200):
     model.eval()
     # construct prob variables
     mc_samples = []
+    mmin = 0
     for k in range(K):
         with torch.no_grad():
             mean_k, logvar_k = model.encode(one_batch)
@@ -125,15 +126,14 @@ def evaluate_LLE(model, one_batch, K=200):
             logp_xz_k = compute_logp_xz(one_batch, y)
             logp_z_k = log_gaussian_distribution(z_k, torch.zeros_like(mean_k), torch.zeros_like(logvar_k))
             logq_zx_k = log_gaussian_distribution(z_k, mean_k, logvar_k)
-        # print(logp_xz_k.mean().item(), logp_z_k.mean().item(), logq_zx_k.mean().item())
-        mc_samples.append(torch.exp(logp_xz_k + logp_z_k - logq_zx_k))
 
+            elbo_sample = logp_xz_k + logp_z_k - logq_zx_k
+            mc_samples.append(elbo_sample)
     all_samples = torch.stack(mc_samples, dim=1)    # batch_size x K
-    avg_samples = torch.sum(all_samples, dim=1).squeeze()    # batch_size x 1
+    max_samples, _ = torch.max(all_samples, dim=1, keepdim=True)
+    log_px = max_samples + torch.log(torch.sum(torch.exp(all_samples - max_samples), dim=1, keepdim=True))
 
-    log_px = torch.log(avg_samples)
-
-    return log_px.squeeze() - np.log(K)
+    return log_px.reshape(-1)
 
 
 def main():
