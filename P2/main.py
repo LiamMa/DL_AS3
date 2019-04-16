@@ -14,10 +14,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import argparse
+parser = argparse.ArgumentParser('P2')
+parser.add_argument('--test_interval', type=int, default=10,
+                    help='epoch intervals to test, e.g., logpx')
+args = parser.parse_args()
+
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 128
 NUM_EPOCHS = 20
-TEST_INTERVAL = 5
+TEST_INTERVAL = 10
 N_LATENT = 100
 LR = 3e-4
 
@@ -30,9 +36,9 @@ def train(model, train_iter, test_iter, optimizer, num_epochs, test_interval):
         epoch_loss = .0
         n_batches = 0
         start = time.time()
-        for batch, X in enumerate(train_iter):
+        for batch, data in enumerate(train_iter):
             n_batches += 1
-            X = X[0].to(dev)
+            X = data[0].to(dev)
             optimizer.zero_grad()
 
             y, mu, logvar = model(X)
@@ -60,15 +66,15 @@ def test(model, test_iter, epoch):
     sum_logpx = 0.0
     n_examples = 0
     with torch.no_grad():
-        for batch, X in enumerate(test_iter):
-            X = X[0].to(dev)
+        for batch, data in enumerate(test_iter):
+            X = data[0].to(dev)
             y, mu, logvar = model(X)
             loss = model.loss_compute(X, y, mu, logvar)
             logpx = evaluate_LLE(model, X, K=200)
 
-            sum_loss += loss.item() * X[0].shape[0]
-            sum_logpx += logpx.item().sum()
-            n_examples += X[0].shape[0]
+            sum_loss += loss.item() * X.shape[0]
+            sum_logpx += logpx.sum().item()
+            n_examples += X.shape[0]
         avg_loss = sum_loss / n_examples
         avg_logpx = sum_logpx / n_examples
     logger.info('Test, Avg Loss: {:.4f}, Avg ELBO: {:.4f}, Avg Log(px): {:.4f}, Time: {:.4f}'.format(
@@ -96,49 +102,38 @@ def test(model, test_iter, epoch):
 
 
 def evaluate_LLE(model, one_batch, K=200):
-    def gaussian_distribution(sample, mean, logvar, dim=1):
+    def log_gaussian_distribution(sample, mean, logvar, dim=1):
         log_p_sample = torch.sum(
-            -.5 * (logvar + np.log(2*np.pi) + (sample - mean) ** 2. * torch.exp(-logvar)),
+            -0.5 * (np.log(2*np.pi) + 2*logvar + (sample - mean) ** 2. * torch.exp(-2*logvar)),
             dim=dim)
+        return log_p_sample
 
-        return torch.exp(log_p_sample)
-
-    def log_sum_exp(p_xz_raw):
-        if len(p_xz_raw.shape) > 2:
-            p_xz_raw = p_xz_raw.view(-1, 784)
-
-        log_sum = torch.sum(torch.log(p_xz_raw), dim=1)
-        p_xz = torch.exp(log_sum)
-
-        return p_xz
+    def compute_logp_xz(X, y):
+        X, y = X.view(-1, 784), y.view(-1, 784)
+        logpx_z = torch.sum(X * torch.log(y + 1e-10) + (1 - X) * torch.log(1 - y + 1e-10), dim=1)
+        return logpx_z
 
     model.eval()
     # construct prob variables
-    p_xz = []
-    p_z = []
-    q_zx = []
+    mc_samples = []
     for k in range(K):
         with torch.no_grad():
             mean_k, logvar_k = model.encode(one_batch)
             z_k = model.reparam(mean_k, logvar_k)
-            p_xz_k, logits = model.decode(z_k)
-            p_xz_k = log_sum_exp(p_xz_k)
-            p_zk = gaussian_distribution(z_k, torch.zeros_like(mean_k), torch.zeros_like(logvar_k))
-            q_zx_k = gaussian_distribution(z_k, mean_k, logvar_k)
+            y, logits = model.decode(z_k)
 
-        p_xz.append(p_xz_k)
-        p_z.append(p_zk)
-        q_zx.append(q_zx_k)
+            logp_xz_k = compute_logp_xz(one_batch, y)
+            logp_z_k = log_gaussian_distribution(z_k, torch.zeros_like(mean_k), torch.zeros_like(logvar_k))
+            logq_zx_k = log_gaussian_distribution(z_k, mean_k, logvar_k)
+        # print(logp_xz_k.mean().item(), logp_z_k.mean().item(), logq_zx_k.mean().item())
+        mc_samples.append(torch.exp(logp_xz_k + logp_z_k - logq_zx_k))
 
-    all_p_xz = torch.stack(p_xz, dim=1)
-    all_p_z = torch.stack(p_z, dim=1)
-    all_q_zx = torch.stack(q_zx, dim=1)
-    assert all_p_xz.shape == all_p_z.shape == all_q_zx.shape
+    all_samples = torch.stack(mc_samples, dim=1)    # batch_size x K
+    avg_samples = torch.sum(all_samples, dim=1).squeeze()    # batch_size x 1
 
-    inside_log = torch.sum((all_p_xz * all_p_z) / all_q_zx, dim=1) / K
-    log_px = torch.log(inside_log)
+    log_px = torch.log(avg_samples)
 
-    return log_px.squeeze()
+    return log_px.squeeze() - np.log(K)
 
 
 def main():
@@ -157,7 +152,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     # train
-    train(model, train_iter, valid_iter, optimizer, NUM_EPOCHS, TEST_INTERVAL)
+    train(model, train_iter, valid_iter, optimizer, NUM_EPOCHS, args.test_interval)
 
 if __name__ == '__main__':
     main()

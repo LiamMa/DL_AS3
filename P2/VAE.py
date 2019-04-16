@@ -92,9 +92,9 @@ class VAE(nn.Module):
     @staticmethod
     def loss_compute(X, y, mu, logvar):
         X, y = X.view(-1, 784), y.view(-1, 784)
-        logpx_z = -torch.sum(X*torch.log(y+1e-10)+ (1-X)*torch.log(1-y+1e-10), dim=1)
+        logpx_z = torch.sum(X*torch.log(y)+ (1-X)*torch.log(1-y), dim=1)
         KL = 0.5 * torch.sum(1 + logvar - mu*mu - logvar.exp(), dim=1)
-        ls = (logpx_z - KL)
+        ls = (-logpx_z - KL)
         return ls.mean()
 
 
