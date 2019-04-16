@@ -83,7 +83,7 @@ class GAN(nn.Module):
             # 128 x 4 x 4
             nn.Conv2d(128, 1, 4, 1, 0),
             Flatten(),
-            nn.Sigmoid()
+            # nn.Sigmoid()
             # 1
         )
 
