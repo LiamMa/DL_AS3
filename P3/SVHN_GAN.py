@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from classify_svhn import Classifier
 
 
 class Flatten(nn.Module):
@@ -30,25 +29,7 @@ class GAN(nn.Module):
 
         self.n_latent = n_latent
 
-        # self.generator = nn.Sequential(
-        #     nn.Linear(self.n_latent, 128 * 4 * 4),
-        #     nn.ELU(),
-        #     Reshape((128, 4, 4)),
-        #
-        #     nn.Conv2d(128, 64, kernel_size=(5, 5), padding=(4, 4)),
-        #     nn.ELU(),
-        #
-        #     nn.UpsamplingBilinear2d(scale_factor=2),
-        #     nn.Conv2d(64, 32, kernel_size=(3, 3), padding=(2, 2)),
-        #     nn.ELU(),
-        #
-        #     nn.UpsamplingBilinear2d(scale_factor=2),
-        #     nn.Conv2d(32, 16, kernel_size=(5, 5), padding=(4, 4)),
-        #     nn.ELU(),
-        #
-        #     nn.Conv2d(16, 3, kernel_size=(5, 5), padding=(4, 4))
-        # )
-
+        # generator input should be: B x n_latent
         self.generator = nn.Sequential(
             # n_latent
             nn.Linear(self.n_latent, 128 * 4 * 4),
@@ -67,7 +48,7 @@ class GAN(nn.Module):
             nn.Tanh()
             # 3 x 32 x 32
         )
-
+        # discriminator input should be: B x 3 x 32 x 32
         self.discriminator = nn.Sequential(
             # 3 x 32 x 32
             nn.Conv2d(3, 32, 4, 2, 1),

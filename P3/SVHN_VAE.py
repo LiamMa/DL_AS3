@@ -29,38 +29,35 @@ class VAE(nn.Module):
         self.n_latent = n_latent
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(3, 3)),
+            # 3 x 32 x 32
+            nn.Conv2d(3, 32, 4, 2, 1),
             nn.ELU(),
-            nn.AvgPool2d(kernel_size=2, stride=2),
-
-            nn.Conv2d(32, 64, kernel_size=(3, 3)),
+            # 32 x 16 x16
+            nn.Conv2d(32, 64, 4, 2, 1),
             nn.ELU(),
-            nn.AvgPool2d(kernel_size=2, stride=2),
-
-            nn.Conv2d(64, 256, kernel_size=(5, 5)),
+            # 64 x 8 x 8
+            nn.Conv2d(64, 128, 4, 2, 1),
             nn.ELU(),
-
+            # 128 x 4 x 4
             Flatten(),
-            nn.Linear(256, self.n_latent*2)
+            nn.Linear(128*4*4, self.n_latent*2)
+            # n_latent * 2
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(self.n_latent, 256),
+            # n_latent
+            nn.Linear(self.n_latent, 128 * 4 * 4),
             nn.ELU(),
-            Reshape((256, 1, 1)),
-
-            nn.Conv2d(256, 64, kernel_size=(5, 5), padding=(4, 4)),
+            Reshape((128, 4, 4)),
+            # 128 x 4 x 4
+            nn.ConvTranspose2d(128, 64, 4, 2, 1),
             nn.ELU(),
-
-            nn.UpsamplingBilinear2d(scale_factor=2),
-            nn.Conv2d(64, 32, kernel_size=(3, 3), padding=(2, 2)),
+            # 64 x 8 x 8
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),
             nn.ELU(),
-
-            nn.UpsamplingBilinear2d(scale_factor=2),
-            nn.Conv2d(32, 16, kernel_size=(3, 3), padding=(2, 2)),
-            nn.ELU(),
-
-            nn.Conv2d(16, 1, kernel_size=(3, 3), padding=(2, 2))
+            # 32 x 16 x 16
+            nn.ConvTranspose2d(32, 3, 4, 2, 1),
+            # 3 x 32 x 32
         )
 
     def encode(self, x):
@@ -94,3 +91,12 @@ class VAE(nn.Module):
         KL = 0.5 * torch.sum(1 + logvar - mu*mu - logvar.exp(), dim=1)
         ls = (logpx_z - KL)
         return ls.mean()
+
+
+if __name__ == '__main__':
+    vae = VAE(100)
+    rand_x = torch.randn((16, 3, 32, 32))
+    mu, logvar = vae.encode(rand_x)
+    z = vae.reparam(mu, logvar)
+    outp, logits = vae.decode(z)
+    print(outp.shape, logits.shape)

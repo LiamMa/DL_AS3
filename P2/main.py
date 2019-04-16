@@ -7,6 +7,11 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -18,10 +23,10 @@ LR = 3e-4
 
 
 def train(model, train_iter, test_iter, optimizer, num_epochs, test_interval):
-    model.train()
-    print('Training begins.')
+    logger.info('Training begins.')
     all_loss = []
     for epoch in range(1, num_epochs+1):
+        model.train()
         epoch_loss = .0
         n_batches = 0
         start = time.time()
@@ -38,7 +43,7 @@ def train(model, train_iter, test_iter, optimizer, num_epochs, test_interval):
             epoch_loss += loss.item()
         epoch_loss /= n_batches
         all_loss.append(epoch_loss)
-        print('Epoch {}, Loss: {:.4f}, ELBO: {:.4f}, Time: {:.4f}'.format(
+        logger.info('Epoch {}, Loss: {:.4f}, ELBO: {:.4f}, Time: {:.4f}'.format(
             epoch, epoch_loss, -epoch_loss, time.time()-start))
 
         if epoch % test_interval == 0:
@@ -51,19 +56,23 @@ def test(model, test_iter, epoch):
     model.eval()
     start = time.time()
 
-    epoch_loss = .0
-    n_batches = 0
+    sum_loss = 0.0
+    sum_logpx = 0.0
+    n_examples = 0
     with torch.no_grad():
         for batch, X in enumerate(test_iter):
-            n_batches += 1
             X = X[0].to(dev)
             y, mu, logvar = model(X)
             loss = model.loss_compute(X, y, mu, logvar)
+            logpx = evaluate_LLE(model, X, K=200)
 
-            epoch_loss += loss.item()
-        epoch_loss /= n_batches
-    print('----------Test, Loss: {:.4f}, ELBO: {:.4f}, Time: {:.4f}----------'.format(
-        epoch_loss, -epoch_loss, time.time()-start))
+            sum_loss += loss.item() * X[0].shape[0]
+            sum_logpx += logpx.item().sum()
+            n_examples += X[0].shape[0]
+        avg_loss = sum_loss / n_examples
+        avg_logpx = sum_logpx / n_examples
+    logger.info('Test, Avg Loss: {:.4f}, Avg ELBO: {:.4f}, Avg Log(px): {:.4f}, Time: {:.4f}'.format(
+        avg_loss, -avg_loss, avg_logpx, time.time()-start))
 
     # generate images
     sample_x = X[:16].cpu().numpy().reshape(4, 4, 28, 28)
@@ -83,12 +92,54 @@ def test(model, test_iter, epoch):
     axes[1].imshow(canvas2, cmap='Greys')
     axes[1].set_title('reconstructed')
     axes[0].axis('off')
-    plt.savefig('Epoch_{}_test_samples.png'.format(epoch))
+    plt.savefig('P2_VAE_Epoch_{}_test_samples.png'.format(epoch))
 
-def evaluate_LLE(model, x, z):
-# def test(model, test_iter):
-#     model.eval()
-    pass
+
+def evaluate_LLE(model, one_batch, K=200):
+    def gaussian_distribution(sample, mean, logvar, dim=1):
+        log_p_sample = torch.sum(
+            -.5 * (logvar + np.log(2*np.pi) + (sample - mean) ** 2. * torch.exp(-logvar)),
+            dim=dim)
+
+        return torch.exp(log_p_sample)
+
+    def log_sum_exp(p_xz_raw):
+        if len(p_xz_raw.shape) > 2:
+            p_xz_raw = p_xz_raw.view(-1, 784)
+
+        log_sum = torch.sum(torch.log(p_xz_raw), dim=1)
+        p_xz = torch.exp(log_sum)
+
+        return p_xz
+
+    model.eval()
+    # construct prob variables
+    p_xz = []
+    p_z = []
+    q_zx = []
+    for k in range(K):
+        with torch.no_grad():
+            mean_k, logvar_k = model.encode(one_batch)
+            z_k = model.reparam(mean_k, logvar_k)
+            p_xz_k, logits = model.decode(z_k)
+            p_xz_k = log_sum_exp(p_xz_k)
+            p_zk = gaussian_distribution(z_k, torch.zeros_like(mean_k), torch.zeros_like(logvar_k))
+            q_zx_k = gaussian_distribution(z_k, mean_k, logvar_k)
+
+        p_xz.append(p_xz_k)
+        p_z.append(p_zk)
+        q_zx.append(q_zx_k)
+
+    all_p_xz = torch.stack(p_xz, dim=1)
+    all_p_z = torch.stack(p_z, dim=1)
+    all_q_zx = torch.stack(q_zx, dim=1)
+    assert all_p_xz.shape == all_p_z.shape == all_q_zx.shape
+
+    inside_log = torch.sum((all_p_xz * all_p_z) / all_q_zx, dim=1) / K
+    log_px = torch.log(inside_log)
+
+    return log_px.squeeze()
+
 
 def main():
     # load dataset and data_iter
