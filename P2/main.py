@@ -103,8 +103,15 @@ def test(model, test_iter, epoch):
 
 def evaluate_LLE(model, one_batch, K=200):
     def log_gaussian_distribution(sample, mean, logvar, dim=1):
+        """
+        :param sample:   samples from gaussian, batch x latent_dim
+        :param mean:     mean of each variable, batch x latent_dim
+        :param logvar:   log of variance, log(sigma^2), batch x latent_dim
+        :param dim:      sum over which dimension, mostly 1.
+        :return:
+        """
         log_p_sample = torch.sum(
-            -0.5 * (np.log(2*np.pi) + 2*logvar + (sample - mean) ** 2. * torch.exp(-2*logvar)),
+            -0.5 * (np.log(2*np.pi) + logvar + (sample - mean) ** 2. * torch.exp(-logvar)),
             dim=dim)
         return log_p_sample
 
