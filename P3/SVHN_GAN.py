@@ -93,7 +93,7 @@ class GAN(nn.Module):
 
         res_D = self.discriminator(x_hat)
         grad_x_hat = torch.autograd.grad(res_D, x_hat, grad_outputs=torch.ones(res_D.shape, device=real_data.device),
-                                         create_graph=True)[0].view(res_D.size(0), -1)
+                                         create_graph=True, retain_graph=True, only_inputs=True)[0].view(res_D.shape[0], -1)
 
         grad_loss = torch.pow((grad_x_hat.norm(2, dim=1) - 1), 2).mean()
 

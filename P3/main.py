@@ -18,6 +18,10 @@ import argparse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser('P3')
+parser.add_argument('--mode', type=str, default='train',
+                    help='train: train a model, '
+                         'test: test a trained model for qualitative analysis,'
+                         'gen: use a trained model to generate 1000 images.')
 parser.add_argument('--model', type=str, default='VAE',
                     help='run vae or gan.')
 parser.add_argument('--test_interval', type=int, default=10,
@@ -32,10 +36,7 @@ parser.add_argument('--save_model', action='store_true',
                     help='save model after training')
 parser.add_argument('--load_model', action='store_true',
                     help='load model to test')
-parser.add_argument('--mode', type=str, default='train',
-                    help='train: train a model, '
-                         'test: test a trained model for qualitative analysis,'
-                         'gen: use a trained model to generate 1000 images.')
+
 args = parser.parse_args()
 
 CHECKPOINT_PATH = 'ckpt'
@@ -125,19 +126,21 @@ def test_vae(model, test_iter, epoch):
     # plt.savefig('P3_VAE_Epoch_{}_test_samples.png'.format(epoch))
 
 
-def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_interval):
-    model.train()
+def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_interval, save_model=False):
     all_loss_g = []
     all_loss_d = []
+    all_wd = []
     fixed_noise = torch.randn(64, N_LATENT).to(dev)
 
     optimizerG = torch.optim.Adam(model.generator.parameters(), lr=LR_G, betas=(beta1, 0.999))
     optimizerD = torch.optim.Adam(model.discriminator.parameters(), lr=LR_D, betas=(beta1, 0.999))
 
     for epoch in range(1, num_epochs+1):
+        model.train()
         epoch_ls_g = []
         epoch_ls_d = []
-        epoch_ce_d = []
+        epoch_wd = []
+        epoch_gp = []
         start = time.time()
         for batch, (X, y) in enumerate(train_iter):
 
@@ -150,15 +153,17 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
 
             outp_real = model.discriminator(X).view(-1)
             outp_fake = model.discriminator(X_fake.detach()).view(-1)
-            gradient_penalty = model.gradient_penalty(X, X_fake.detach())
+            gradient_penalty = LAMBDA * model.gradient_penalty(X, X_fake.detach())
             wd_distance = outp_real.mean() - outp_fake.mean()
-            d_loss = -wd_distance + LAMBDA * gradient_penalty
+            d_loss = -wd_distance + gradient_penalty
             # D_X = outp_real.mean().item()
             # D_G_z1 = outp_fake.mean().item()
 
             d_loss.backward()
             optimizerD.step()
             epoch_ls_d.append(d_loss.item())
+            epoch_wd.append(wd_distance.item())
+            epoch_gp.append(gradient_penalty.item())
 
             # update generator
             if (batch+1) % G_update_iterval == 0:
@@ -178,17 +183,24 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
 
         all_loss_g.append(sum(epoch_ls_g) / len(epoch_ls_g))
         all_loss_d.append(sum(epoch_ls_d) / len(epoch_ls_d))
-        template = 'Epoch {}, G Loss:{:.2f}, D Loss:{:.2f}, G WD:{:.2f}, ' \
+        all_wd.append(sum(epoch_wd) / len(epoch_wd))
+        template = 'Epoch {}, G Loss:{:.2f}, D Loss:{:.2f}, G WD:{:.2f}, gp:{:.2f}, ' \
                    'Time: {:.2f}.'
         logger.info(template.format(epoch, all_loss_g[-1], all_loss_d[-1],
-                              wd_distance, time.time() - start)
+                              all_wd[-1], sum(epoch_gp) / len(epoch_gp), time.time() - start)
         )
 
         if epoch % test_interval == 0:
             model.eval()
-            test_generate_imgs(model.generator, fixed_noise, 'GAN_generated_samples_epoch_{}.png'.format(epoch))
-            test_all(model.generator, 4, N_LATENT)
-            model.train()
+            with torch.no_grad():
+                x = model.generator(fixed_noise).cpu()
+                x = utils.de_normalize(x)
+            save_image(x, filename='figure/P3_GAN_generated_samples_epoch_{}.png'.format(epoch))
+
+    if save_model:
+        utils.model_save(model, 'P3_GAN.pt')
+    utils.make_plot(all_loss_d, save_name='P3_gan_learning_curve.png', title='GAN Learning Curve', tickets=['Epochs', 'D Loss'])
+    return all_loss_d
 
 
 def test_generate_imgs(netG, z, model_name, origin_img=None):
@@ -255,6 +267,7 @@ def test_all(model, test_iter, batch_size, n_latent, model_name):
         z0 = torch.randn(size=(batch_size, n_latent), device=dev)
         z1 = torch.randn(size=(batch_size, n_latent), device=dev)
         netG = model.generator
+        x = None
     else:
         x, z = [], []
         for num_batch, (X, y) in enumerate(test_iter):
@@ -265,9 +278,10 @@ def test_all(model, test_iter, batch_size, n_latent, model_name):
                 break
         z0, z1 = z
         netG = model.decoder
+        x = torch.cat(x)
 
     # qualitative analysis 1
-    test_generate_imgs(netG, torch.cat([z0, z1]), model_name, origin_img=torch.cat(x))
+    test_generate_imgs(netG, torch.cat([z0, z1]), model_name, origin_img=x)
     # qualitative analysis 2
     test_disentangle(netG, z0, 2, model_name)
     # qualitative analysis 3
@@ -287,7 +301,7 @@ def generate_images(netG, latents, save_path):
 
     netG.eval()
     with torch.no_grad():
-        reconstruction = netG(latents).tanh()
+        reconstruction = netG(latents)
         if isinstance(reconstruction, tuple):
             reconstruction = reconstruction[0]
         reconstruction = reconstruction.tanh().permute([0, 2, 3, 1]).cpu().numpy()
@@ -310,11 +324,21 @@ def main(args):
     # ---------- GAN related ----------
     if args.model == 'GAN':
         if not args.load_model or args.mode == 'train':
-            model = GAN(N_LATENT)
+            if not model:
+                model = GAN(N_LATENT)
             model.to(dev)
             train_gan(model, train_iter, test_iter, args.num_epochs,
                       G_update_iterval=args.G_update_interval, test_interval=args.test_interval,
                       save_model=args.save_model)
+        model.eval()
+
+        if args.mode == 'test':
+            test_all(model, test_iter, args.batch_size, N_LATENT, model_name='GAN')
+
+        if args.mode == 'gen':
+            latent = torch.randn(size=(1000, N_LATENT), device=dev)
+            generate_images(model.generator, latent, save_path='sample/GAN/samples')
+
     # ---------- VAE related ----------
     else:
         if args.mode == 'train' or not args.load_model:
