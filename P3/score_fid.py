@@ -5,8 +5,13 @@ import torchvision.transforms as transforms
 import torch
 import classify_svhn
 from classify_svhn import Classifier
+from scipy import linalg
+import numpy as np
+from scipy import linalg
+from logging import warnings
 
-SVHN_PATH = "svhn"
+# SVHN_PATH = "svhn"
+SVHN_PATH ='data'
 PROCESS_BATCH_SIZE = 32
 
 
@@ -70,11 +75,117 @@ def extract_features(classifier, data_loader):
                 yield h[i]
 
 
+
 def calculate_fid_score(sample_feature_iterator,
                         testset_feature_iterator):
     """
     To be implemented by you!
+    p: target--> testset
+    q: generator-> sample
     """
+
+    sample_feature_iterator = sample_f
+
+    testset_feature_iterator = test_f
+
+    sample = []
+    testset = []
+
+
+    for i in sample_feature_iterator:
+        sample.append(np.array(i).reshape(1, -1))
+
+    for j in testset_feature_iterator:
+        testset.append(np.array(j).reshape(1, -1))
+
+    testset = np.concatenate(testset, 0)
+    sample = np.concatenate(sample, 0)
+    print("testset: ",testset.shape)
+    print("sample: ",sample.shape)
+    print("testset max: %f  and min: %f "%(np.max(testset),np.min(testset)))
+    print("sample max: %f  and min: %f "%(np.max(sample),np.min(sample)))
+
+
+    mu1 = np.mean(testset, axis=0)
+    mu2 = np.mean(sample, axis=0)
+    sigma1 = np.cov(testset, rowvar=False)
+    sigma2 = np.cov(sample, rowvar=False)
+
+    print(sigma1.shape)
+    print(sigma2.shape)
+
+
+    mu1 = np.atleast_1d(mu1)
+    mu2 = np.atleast_1d(mu2)
+
+    sigma1 = np.atleast_2d(sigma1)
+    sigma2 = np.atleast_2d(sigma2)
+
+    assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
+    assert sigma1.shape == sigma2.shape, "Training and test covariances have different dimensions"
+
+    diff = mu1 - mu2
+
+    # product might be almost singular
+    covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+    if not np.isfinite(covmean).all():
+        msg = "fid calculation produces singular product; adding %s to diagonal of cov estimates" % eps
+        warnings.warn(msg)
+        offset = np.eye(sigma1.shape[0]) * eps
+        covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+
+    # numerical error might give slight imaginary component
+    if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            m = np.max(np.abs(covmean.imag))
+            raise ValueError("Imaginary component {}".format(m))
+        covmean = covmean.real
+
+    tr_covmean = np.trace(covmean)
+
+    d2 = diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+
+    print(diff.dot(diff))
+    print(np.trace(sigma1))
+    print(np.trace(sigma2))
+    print(2 * tr_covmean)
+
+    #
+    #
+    #
+    # p=torch.Tensor(next(sample_feature_iterator))
+    # q=torch.Tensor(next(testset_feature_iterator))
+    #
+    # p=p.view(p.size(0),-1)
+    # q=q.view(q.size(0),-1)
+    #
+    # mu_p=torch.mean(p,dim=0)
+    # mu_q=torch.mean(q,dim=0)
+    #
+    # mu_p,_=torch.broadcast_tensors(mu_p,p)
+    # mu_q,_=torch.broadcast_tensors(mu_q,q)
+    #
+    # cov_p=torch.mm(p-mu_p,(p-mu_p).transpose(0,1))
+    # cov_q=torch.mm(q-mu_q,(q-mu_q).transpose(0,1))
+    # sq=torch.mm(cov_p,cov_q)
+    # sq=torch.clamp(sq,min=0)
+    #
+    # print(sq.size())
+    #
+    #
+    # # TODO: bug---the sqrt of negative leads to nan
+    #
+    # d=torch.norm(mu_p-mu_q,p=2)**2 +torch.trace(cov_p)+torch.trace(cov_q)-2*torch.trace(torch.sqrt(sq))
+    # print(torch.norm(mu_p-mu_q,p=2)**2)
+    # print(torch.trace(cov_p))
+    # print(torch.trace(cov_q))
+    # print(2*torch.trace(torch.sqrt(sq)))
+    #
+    #
+    # print(cov_p)
+
+    return d2
+    
     raise NotImplementedError(
         "TO BE IMPLEMENTED."
         "Part of Assignment 3 Quantitative Evaluations"
@@ -112,3 +223,122 @@ if __name__ == "__main__":
 
     fid_score = calculate_fid_score(sample_f, test_f)
     print("FID score:", fid_score)
+
+
+
+
+# sample_feature_iterator=sample_f
+#
+# testset_feature_iterator=test_f
+#
+# sample=[]
+# testset=[]
+# #
+# for i in sample_feature_iterator:
+#     sample.append(torch.Tensor(i).view(1,-1))
+#
+# for j in testset_feature_iterator:
+#     testset.append(torch.Tensor(j).view(1,-1))
+#
+#
+#
+# sample=torch.cat(sample,dim=0)
+# testset=torch.cat(testset,dim=0)
+#
+# print(sample.size())
+# print(testset.size())
+#
+#
+# mu_q=torch.mean(sample,dim=0,keepdim=True)
+# print(mu_q.size())
+# mu_p=torch.mean(testset,dim=0,keepdim=True)
+#
+#
+# mu_q_,_=torch.broadcast_tensors(mu_q,sample)
+# mu_p_,_=torch.broadcast_tensors(mu_p,testset)
+#
+#
+# sample_debias=sample-mu_q_
+# testset_debias=testset-mu_p_
+#
+#
+# cov_q=torch.mm(sample_debias.transpose(0,1),sample_debias)
+# cov_p=torch.mm(testset_debias.transpose(0,1),testset_debias)
+# print("cov_p",cov_p.size())
+#
+# cov_cov=torch.clamp(torch.mm(cov_p,cov_q),min=0).diagonal()
+# cov_cov=2*torch.sqrt(cov_cov)
+#
+#
+# d2=torch.norm((mu_p-mu_q),p=2)**2+torch.trace(cov_p)+torch.trace(cov_q)-torch.sum(cov_cov)
+
+
+
+
+
+
+#
+# for i in sample_feature_iterator:
+#     sample.append(np.array(i).reshape(1,-1))
+#
+# for j in testset_feature_iterator:
+#     testset.append(np.array(j).reshape(1,-1))
+#
+# testset=np.concatenate(testset,0)
+# sample=np.concatenate(sample,0)
+#
+#
+# mu1=np.mean(testset, axis=0)
+# mu2=np.mean(sample, axis=0)
+# sigma1 = np.cov(testset, rowvar=False)
+# sigma2=np.cov(sample, rowvar=False)
+#
+#
+# mu1 = np.atleast_1d(mu1)
+# mu2 = np.atleast_1d(mu2)
+#
+# sigma1 = np.atleast_2d(sigma1)
+# sigma2 = np.atleast_2d(sigma2)
+#
+# assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
+# assert sigma1.shape == sigma2.shape, "Training and test covariances have different dimensions"
+#
+# diff = mu1 - mu2
+#
+# # product might be almost singular
+# covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
+# if not np.isfinite(covmean).all():
+#     msg = "fid calculation produces singular product; adding %s to diagonal of cov estimates" % eps
+#     warnings.warn(msg)
+#     offset = np.eye(sigma1.shape[0]) * eps
+#     covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+#
+# # numerical error might give slight imaginary component
+# if np.iscomplexobj(covmean):
+#     if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+#         m = np.max(np.abs(covmean.imag))
+#         raise ValueError("Imaginary component {}".format(m))
+#     covmean = covmean.real
+#
+# tr_covmean = np.trace(covmean)
+#
+# d2=diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
+#
+#
+#
+# print(diff.dot(diff))
+# print(np.trace(sigma1))
+# print(np.trace(sigma2))
+# print(2 * tr_covmean)
+#
+# print("fid score: ",d2)
+
+
+
+
+
+
+
+
+
+
