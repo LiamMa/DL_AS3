@@ -79,7 +79,7 @@ class GAN(nn.Module):
         pass
 
     def generate(self, rand_x):
-        return self.generator(rand_x).tanh()
+        return self.generator(rand_x)
 
     def discriminate(self, x):
         return self.discriminator(x)

@@ -246,7 +246,7 @@ def test_interpolate(netG, z0, z1, model_name):
         res.append(x)
     all_imgs = torch.stack(res, dim=1)
     all_imgs = all_imgs.permute([0, 1, 3, 4, 2])
-    utils.make_grid_img(all_imgs, 'P3_Quality_3_{}_interpolate1_latent.png'.format(model_name))
+    utils.make_grid_img(all_imgs, 'P3_Quality_3_{}_interpolate2_sample.png'.format(model_name))
 
 
 def test_all(model, test_iter, batch_size, n_latent, model_name):
@@ -269,12 +269,19 @@ def test_all(model, test_iter, batch_size, n_latent, model_name):
     # qualitative analysis 1
     test_generate_imgs(netG, torch.cat([z0, z1]), model_name, origin_img=torch.cat(x))
     # qualitative analysis 2
-    test_disentangle(netG, z0, 1e-1, model_name)
+    test_disentangle(netG, z0, 2, model_name)
     # qualitative analysis 3
     test_interpolate(netG, z0, z1, model_name)
 
 
 def generate_images(netG, latents, save_path):
+    """
+    generate 1000 images from latents to compute FID.
+    :param netG:        vae.decoder or gan.generator
+    :param latents:     [1000, n_latent]
+    :param save_path:
+    :return:
+    """
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
