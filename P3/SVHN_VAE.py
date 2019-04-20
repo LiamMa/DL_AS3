@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from classify_svhn import Classifier
+import numpy as np
+
 
 class Flatten(nn.Module):
 
@@ -58,6 +60,7 @@ class VAE(nn.Module):
             # 32 x 16 x 16
             nn.ConvTranspose2d(32, 3, 4, 2, 1),
             # 3 x 32 x 32
+            nn.Tanh()
         )
 
     def encode(self, x):
@@ -73,24 +76,37 @@ class VAE(nn.Module):
         return z
 
     def decode(self, z):
-        logits = self.decoder(z)
-        outp = torch.sigmoid(logits)
-        return outp, logits
+        outp = self.decoder(z)
+        return outp
 
     def forward(self, x):
         mu, logvar = self.encode(x)
         z = self.reparam(mu, logvar)
-        outp, logits = self.decode(z)
+        outp = self.decode(z)
 
         return outp, mu, logvar
 
     @staticmethod
     def loss_compute(X, y, mu, logvar):
-        X, y = X.view(-1, 784), y.view(-1, 784)
-        logpx_z = -torch.sum(X*torch.log(y+1e-10)+ (1-X)*torch.log(1-y+1e-10), dim=1)
+        X, y = X.view(X.shape[0], -1), y.view(X.shape[0], -1)
+        logpx_z = VAE.log_gaussian_distribution(X, y, torch.zeros_like(y))
         KL = 0.5 * torch.sum(1 + logvar - mu*mu - logvar.exp(), dim=1)
-        ls = (logpx_z - KL)
+        ls = (-logpx_z - KL)
         return ls.mean()
+
+    @staticmethod
+    def log_gaussian_distribution(sample, mean, logvar, dim=1):
+        """
+        :param sample:   samples from gaussian, batch x latent_dim
+        :param mean:     mean of each variable, batch x latent_dim
+        :param logvar:   log of variance, log(sigma^2), batch x latent_dim
+        :param dim:      sum over which dimension, mostly 1.
+        :return:
+        """
+        log_p_sample = torch.sum(
+            -0.5 * (np.log(2*np.pi) + logvar + (sample - mean) ** 2. * torch.exp(-logvar)),
+            dim=dim)
+        return log_p_sample
 
 
 if __name__ == '__main__':

@@ -45,8 +45,8 @@ class GAN(nn.Module):
             nn.ELU(),
             # 32 x 16 x 16
             nn.ConvTranspose2d(32, 3, 4, 2, 1),
-            nn.Tanh()
             # 3 x 32 x 32
+            nn.Tanh()
         )
         # discriminator input should be: B x 3 x 32 x 32
         self.discriminator = nn.Sequential(
@@ -79,7 +79,7 @@ class GAN(nn.Module):
         pass
 
     def generate(self, rand_x):
-        return self.generator(rand_x)
+        return self.generator(rand_x).tanh()
 
     def discriminate(self, x):
         return self.discriminator(x)
