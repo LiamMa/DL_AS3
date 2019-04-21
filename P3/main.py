@@ -45,7 +45,7 @@ SAMPLE_PATH = '{}/samples'.format(args.model)
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 N_LATENT = 100
 LR_G = 0.0001
-LR_D = 0.001
+LR_D = 0.0001
 LR_VAE = 1e-3
 beta1 = 0.5
 LAMBDA = 10
@@ -137,20 +137,16 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
         start = time.time()
         for batch, (X, y) in enumerate(train_iter):
 
+            # 1. update discriminator
+            optimizerD.zero_grad()
             X = X.to(dev)
             noise = torch.randn(size=(X.shape[0], N_LATENT)).to(dev)
             X_fake = model.generator(noise)
-
-            # update discriminator
-            optimizerD.zero_grad()
-
             outp_real = model.discriminator(X).view(-1)
             outp_fake = model.discriminator(X_fake.detach()).view(-1)
-            gradient_penalty = LAMBDA * model.gradient_penalty(X, X_fake.detach())
+            gradient_penalty = LAMBDA * model.gradient_penalty(X.data, X_fake.data)
             wd_distance = outp_real.mean() - outp_fake.mean()
             d_loss = -wd_distance + gradient_penalty
-            # D_X = outp_real.mean().item()
-            # D_G_z1 = outp_fake.mean().item()
 
             d_loss.backward()
             optimizerD.step()
@@ -158,18 +154,14 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
             epoch_wd.append(wd_distance.item())
             epoch_gp.append(gradient_penalty.item())
 
-            # update generator
+            # 2. update generator
             if (batch+1) % G_update_iterval == 0:
                 optimizerG.zero_grad()
                 noise = torch.randn(size=(X.shape[0], N_LATENT)).to(dev)
                 X_fake = model.generator(noise)
-                outp_fake = model.discriminator(X_fake)
+                outp_fake = model.discriminator(X_fake).view(-1)
                 g_loss = -outp_fake.mean()
-                # outp_fake = model.discriminator(X_fake).view(-1)
-                # errG = criterion(outp_fake, one_label)
 
-                # D_G_z2 = outp_fake.mean().item()
-                # g_loss = errG
                 g_loss.backward()
                 optimizerG.step()
                 epoch_ls_g.append(g_loss.item())
@@ -191,7 +183,7 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
             save_image(x, filename='figure/P3_GAN_generated_samples_epoch_{}.png'.format(epoch))
 
     if save_model:
-        utils.model_save(model, 'P3_GAN.pt')
+        utils.model_save(model, 'P3_GAN_Epoch{}.pt'.format(num_epochs))
     utils.make_plot(all_loss_d, save_name='P3_gan_learning_curve.png', title='GAN Learning Curve', tickets=['Epochs', 'D Loss'])
     return all_loss_d
 

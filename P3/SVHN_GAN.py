@@ -28,6 +28,7 @@ class GAN(nn.Module):
         super(GAN, self).__init__()
 
         self.n_latent = n_latent
+        self.nc = 32
 
         # # generator input should be: B x n_latent
         # self.generator = nn.Sequential(
@@ -70,35 +71,36 @@ class GAN(nn.Module):
         # generator input should be: B x n_latent
         self.generator = nn.Sequential(
             # n_latent
-            nn.Linear(self.n_latent, 256 * 4 * 4),
+            Reshape((self.n_latent, 1, 1)),
+            nn.ConvTranspose2d(self.n_latent, self.nc * 4, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(self.nc * 4),
             nn.ELU(),
-            Reshape((128, 4, 4)),
             # 128 x 4 x 4
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),
-            nn.BatchNorm2d(128),
+            nn.ConvTranspose2d(self.nc*4, self.nc*2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(self.nc * 2),
             nn.ELU(),
             # 64 x 8 x 8
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
-            nn.BatchNorm2d(64),
+            nn.ConvTranspose2d(self.nc*2, self.nc, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(self.nc),
             nn.ELU(),
             # 32 x 16 x 16
-            nn.ConvTranspose2d(64, 3, 4, 2, 1),
+            nn.ConvTranspose2d(self.nc, 3, 4, 2, 1, bias=False),
             # 3 x 32 x 32
             nn.Tanh()
         )
         # discriminator input should be: B x 3 x 32 x 32
         self.discriminator = nn.Sequential(
             # 3 x 32 x 32
-            nn.Conv2d(3, 64, 4, 2, 1),
+            nn.Conv2d(3, self.nc, 4, 2, 1),
             nn.ELU(),
             # 32 x 16 x16
-            nn.Conv2d(64, 128, 4, 2, 1),
+            nn.Conv2d(self.nc, self.nc*2, 4, 2, 1),
             nn.ELU(),
             # 64 x 8 x 8
-            nn.Conv2d(128, 256, 4, 2, 1),
+            nn.Conv2d(self.nc*2, self.nc*4, 4, 2, 1),
             nn.ELU(),
             # 128 x 4 x 4
-            nn.Conv2d(256, 1, 4, 1, 0),
+            nn.Conv2d(self.nc*4, 1, 4, 1, 0),
             Flatten(),
             # nn.Sigmoid()
             # 1
