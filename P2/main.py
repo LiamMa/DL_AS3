@@ -6,6 +6,7 @@ import time
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
+from torchvision.utils import save_image
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,14 +17,19 @@ logger = logging.getLogger(__name__)
 
 import argparse
 parser = argparse.ArgumentParser('P2')
-parser.add_argument('--test_interval', type=int, default=10,
+parser.add_argument('--test_interval', type=int, default=20,
                     help='epoch intervals to test, e.g., logpx')
+parser.add_argument('--save_model', action='store_true',
+                    help='save model after training')
+parser.add_argument('--load_model', action='store_true',
+                    help='load model to test')
+
 args = parser.parse_args()
 
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 128
 NUM_EPOCHS = 20
-TEST_INTERVAL = 10
+TEST_INTERVAL = 20
 N_LATENT = 100
 LR = 3e-4
 
@@ -53,19 +59,35 @@ def train(model, train_iter, test_iter, optimizer, num_epochs, test_interval):
             epoch, epoch_loss, -epoch_loss, time.time()-start))
 
         if epoch % test_interval == 0:
-            test(model, test_iter, epoch)
+            if isinstance(test_iter, list):
+                v_iter, t_iter = test_iter
+                test(model, v_iter, epoch, postfix='Valid')
+                test(model, t_iter, epoch, postfix='Test')
+            else:
+                test(model, test_iter, epoch, postfix='Test')
 
+    plt.close()
+    plt.plot(all_loss)
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss/-ELBO')
+    plt.title('P2: VAE learning curve')
+    plt.savefig('P2_learning_curve.png')
+    plt.close()
+
+    if args.save_model:
+        torch.save(model, 'p2_vae.pt')
     return all_loss
 
 
-def test(model, test_iter, epoch):
+def test(model, test_iter, epoch, postfix='Test'):
     model.eval()
     start = time.time()
-
+    fixed_noise = torch.randn(size=(32, N_LATENT), device=dev)
     sum_loss = 0.0
     sum_logpx = 0.0
     n_examples = 0
     with torch.no_grad():
+        fixed_samples = model.decoder(fixed_noise).cpu()
         for batch, data in enumerate(test_iter):
             X = data[0].to(dev)
             y, mu, logvar = model(X)
@@ -77,10 +99,12 @@ def test(model, test_iter, epoch):
             n_examples += X.shape[0]
         avg_loss = sum_loss / n_examples
         avg_logpx = sum_logpx / n_examples
-    logger.info('Test, Avg Loss: {:.4f}, Avg ELBO: {:.4f}, Avg Log(px): {:.4f}, Time: {:.4f}'.format(
-        avg_loss, -avg_loss, avg_logpx, time.time()-start))
+    logger.info('{}, Avg Loss: {:.4f}, Avg ELBO: {:.4f}, Avg Log(px): {:.4f}, Time: {:.4f}'.format(
+        postfix, avg_loss, -avg_loss, avg_logpx, time.time()-start))
 
-    # generate images
+    # generate new imgs:
+    save_image(fixed_samples, ('P2_VAE_Epoch_{}_test_samples_{}.png'.format(epoch, postfix)))
+    # generate reconstructions:
     sample_x = X[:16].cpu().numpy().reshape(4, 4, 28, 28)
     recons_x = y[:16].cpu().numpy().reshape(4, 4, 28, 28)
 
@@ -97,8 +121,9 @@ def test(model, test_iter, epoch):
     axes[0].axis('off')
     axes[1].imshow(canvas2, cmap='Greys')
     axes[1].set_title('reconstructed')
-    axes[0].axis('off')
-    plt.savefig('P2_VAE_Epoch_{}_test_samples.png'.format(epoch))
+    axes[1].axis('off')
+    plt.savefig('P2_VAE_Epoch_{}_test_recons_{}.png'.format(epoch, postfix))
+    plt.close()
 
 
 def evaluate_LLE(model, one_batch, K=200):
@@ -151,7 +176,7 @@ def main():
 
     train_iter = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     valid_iter = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
-    # test_iter  = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    test_iter  = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
     # load model, loss, optimizer
     model = VAE(n_latent=N_LATENT)
@@ -159,7 +184,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     # train
-    train(model, train_iter, valid_iter, optimizer, NUM_EPOCHS, args.test_interval)
+    train(model, train_iter, [valid_iter, test_iter], optimizer, NUM_EPOCHS, args.test_interval)
 
 if __name__ == '__main__':
     main()

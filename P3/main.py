@@ -52,10 +52,12 @@ LAMBDA = 10
 
 
 def train_vae(model, train_iter, test_iter, num_epochs, test_interval, save_model=False):
-    test_vae(model, test_iter, 0)
     logger.info('Training VAE begins.')
     all_loss = []
     optimizer = torch.optim.Adam(model.parameters(), lr=LR_VAE)  #, betas=(beta1, 0.999))
+    fixed_noise = torch.randn(size=(32, N_LATENT), device=dev)
+    test_vae(model, test_iter, fixed_noise, 0)
+
     for epoch in range(1, num_epochs+1):
         model.train()
         epoch_loss = .0
@@ -73,13 +75,13 @@ def train_vae(model, train_iter, test_iter, num_epochs, test_interval, save_mode
 
             loss.backward()
             optimizer.step()
-            epoch_loss += loss.item()
-        epoch_loss /= n_batches
+            epoch_loss += loss.item() * X.shape[0]
+        epoch_loss /= len(train_iter.dataset)
         all_loss.append(epoch_loss)
         logger.info('Epoch {}, Loss: {:.4f}, ELBO: {:.4f}, Time: {:.4f}, Img processed: {}'.format(
-            epoch, epoch_loss, -epoch_loss, time.time()-start, n_images))
+            epoch, epoch_loss, -epoch_loss, time.time()-start, len(train_iter.dataset)))
         if epoch % test_interval == 0:
-            test_vae(model, test_iter, epoch)
+            test_vae(model, test_iter, fixed_noise, epoch)
 
     if save_model:
         utils.model_save(model, 'P3_VAE.pt')
@@ -87,12 +89,11 @@ def train_vae(model, train_iter, test_iter, num_epochs, test_interval, save_mode
     return all_loss
 
 
-def test_vae(model, test_iter, epoch):
+def test_vae(model, test_iter, fixed_noise, epoch):
     model.eval()
     start = time.time()
 
     sum_loss = 0.0
-    n_examples = 0
     with torch.no_grad():
         for batch, data in enumerate(test_iter):
             X = data[0].to(dev)
@@ -100,30 +101,22 @@ def test_vae(model, test_iter, epoch):
             loss = model.loss_compute(X, y, mu, logvar)
 
             sum_loss += loss.item() * X.shape[0]
-            n_examples += X.shape[0]
-        avg_loss = sum_loss / n_examples
+        avg_loss = sum_loss / len(test_iter.dataset)
     logger.info('Test, Avg Loss: {:.4f}, Avg ELBO: {:.4f}, Time: {:.4f}'.format(
         avg_loss, -avg_loss, time.time()-start))
 
     # generate images
-    sample_x = X[:16].view(4, 4, 3, 32, 32).contiguous()
-    recons_x = y[:16].view(4, 4, 3, 32, 32).contiguous()
-    all_x = torch.cat((sample_x, recons_x), dim=1).permute([0, 1, 3, 4, 2]).cpu().numpy()
-    utils.make_grid_img(all_x, 'P3_VAE_Epoch_{}_test_samples.png'.format(epoch),
-                        title='Left 4: sample, Right 4: reconstruction')
-    # for i in range(4):
-    #     for j in range(4):
-    #         canvas1[i * 28:(i + 1) * 28, j * 28:(j + 1) * 28] = sample_x[i, j]
-    #         canvas2[i * 28:(i + 1) * 28, j * 28:(j + 1) * 28] = recons_x[i, j]
-    #
-    # fig, axes = plt.subplots(1, 2)
-    # axes[0].imshow(canvas1, cmap='Greys')
-    # axes[0].set_title('original')
-    # axes[0].axis('off')
-    # axes[1].imshow(canvas2, cmap='Greys')
-    # axes[1].set_title('reconstructed')
-    # axes[0].axis('off')
-    # plt.savefig('P3_VAE_Epoch_{}_test_samples.png'.format(epoch))
+    sample_x = X[:16]
+    recons_x = y[:16]
+    all_x = torch.cat((sample_x, recons_x), dim=0).cpu()
+    all_x = utils.de_normalize(all_x)
+    save_image(all_x, 'figure/P3_VAE_Epoch_{}_test_reconstructions.png'.format(epoch), padding=2)
+
+    # generate new images
+    with torch.no_grad():
+        y = model.decoder(fixed_noise).cpu()
+        y = utils.de_normalize(y)
+        save_image(y, filename='figure/P3_VAE_Epoch_{}_test_samples.png'.format(epoch), padding=2)
 
 
 def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_interval, save_model=False):
@@ -203,17 +196,16 @@ def train_gan(model, train_iter, test_iter, num_epochs, G_update_iterval, test_i
     return all_loss_d
 
 
-def test_generate_imgs(netG, z, model_name, origin_img=None):
-    save_name = 'P3_Quality_1_{}.png'.format(model_name)
+def test_generate_imgs(netG, z, model_name, origin_img=None, nrow=8):
+    save_name = 'figure/P3_Quality_1_{}.png'.format(model_name)
     with torch.no_grad():
         x = netG(z).cpu()
-        x = utils.de_normalize(x).view(2, x.shape[0]//2, *(x.shape[1:]))
-        x = x.permute([0, 1, 3, 4, 2])
-    utils.make_grid_img(x, save_name)
+        x = utils.de_normalize(x)
+    save_image(x, save_name, nrow)
     if origin_img is not None:
-        origin_img = origin_img.cpu().view(2, origin_img.shape[0]//2, *(origin_img.shape[1:])).permute([0, 1, 3, 4, 2])
-        save_name = 'P3_Quality_1_{}_origin.png'.format(model_name)
-        utils.make_grid_img(origin_img, save_name)
+        origin_img = utils.de_normalize(origin_img)
+        save_name = 'figure/P3_Quality_1_{}_origin.png'.format(model_name)
+        save_image(origin_img, save_name, nrow=nrow)
 
 
 def test_disentangle(netG, z, eps, model_name):
@@ -227,9 +219,10 @@ def test_disentangle(netG, z, eps, model_name):
         res.append(x_hat)
 
         if len(res) == 10:
-            all_imgs = torch.stack(res, dim=1)
-            all_imgs = all_imgs.permute([0, 1, 3, 4, 2])
-            utils.make_grid_img(all_imgs, 'P3_Quality_2_{}_disentangle_{:.3f}_{}-{}-dim.png'.format(model_name, eps, i-10, i))
+            all_imgs = torch.cat(res, dim=0)
+            all_imgs = utils.de_normalize(all_imgs)
+            save_image(all_imgs, 'figure/P3_Quality_2_{}_disentangle_{:.3f}_{}-{}-dim.png'.format(
+                model_name, eps, i-10+2, i+1), nrow=z.shape[0])
             res = []
 
 
@@ -244,9 +237,9 @@ def test_interpolate(netG, z0, z1, model_name):
         with torch.no_grad():
             x = netG(z).cpu()
         res.append(x)
-    all_imgs = torch.stack(res, dim=1)
-    all_imgs = all_imgs.permute([0, 1, 3, 4, 2])
-    utils.make_grid_img(all_imgs, 'P3_Quality_3_{}_interpolate1_latent.png'.format(model_name))
+    all_imgs = torch.cat(res, dim=0)
+    all_imgs = utils.de_normalize(all_imgs)
+    save_image(all_imgs, 'figure/P3_Quality_3_{}_interpolate1_latent.png'.format(model_name), nrow=z0.shape[0])
 
     # interpolate data space:
     res = []
@@ -256,9 +249,9 @@ def test_interpolate(netG, z0, z1, model_name):
     for a in alpha:
         x = a * x0 + (1-a) * x1
         res.append(x)
-    all_imgs = torch.stack(res, dim=1)
-    all_imgs = all_imgs.permute([0, 1, 3, 4, 2])
-    utils.make_grid_img(all_imgs, 'P3_Quality_3_{}_interpolate2_sample.png'.format(model_name))
+    all_imgs = torch.cat(res, dim=0)
+    all_imgs = utils.de_normalize(all_imgs)
+    save_image(all_imgs, 'figure/P3_Quality_3_{}_interpolate2_sample.png'.format(model_name), nrow=z0.shape[0])
 
 
 def test_all(model, test_iter, batch_size, n_latent, model_name):
@@ -274,14 +267,16 @@ def test_all(model, test_iter, batch_size, n_latent, model_name):
             X = X.to(dev)
             x.append(X)
             z.append(model.reparam(*(model.encode(X))))
-            if num_batch == 1:
+            if num_batch == 8:
                 break
-        z0, z1 = z
+        z0, z1 = z[-2:]
         netG = model.decoder
-        x = torch.cat(x)
+        x = torch.cat(x[-2:])
 
+    z0 = torch.randn(size=(batch_size, n_latent), device=dev)
+    z1 = torch.randn(size=(batch_size, n_latent), device=dev)
     # qualitative analysis 1
-    test_generate_imgs(netG, torch.cat([z0, z1]), model_name, origin_img=x)
+    test_generate_imgs(netG, torch.randn(64, n_latent).to(dev), model_name, origin_img=x)
     # qualitative analysis 2
     test_disentangle(netG, z0, 2, model_name)
     # qualitative analysis 3
@@ -304,7 +299,7 @@ def generate_images(netG, latents, save_path):
         reconstruction = netG(latents)
         if isinstance(reconstruction, tuple):
             reconstruction = reconstruction[0]
-        reconstruction = reconstruction.tanh().permute([0, 2, 3, 1]).cpu().numpy()
+        reconstruction = reconstruction.permute([0, 2, 3, 1]).cpu().numpy()
 
     reconstruction = utils.de_normalize(reconstruction)
     for i in range(reconstruction.shape[0]):
@@ -312,7 +307,7 @@ def generate_images(netG, latents, save_path):
 
 
 def main(args):
-    train_iter, valid_iter, test_iter = get_data_loader('data', args.batch_size)
+    train_iter, valid_iter, test_iter = get_data_loader('data', args.batch_size, model=args.model)
     # ---------- Try to load model first ----------
     model = None
     if args.load_model:
@@ -352,17 +347,18 @@ def main(args):
             test_all(model, test_iter, args.batch_size, N_LATENT, model_name='VAE')
 
         if args.mode == 'gen':
-            n_imgs = 0
-            latent = []
-            with torch.no_grad():
-                for batch in test_iter:
-                    X = batch[0].to(dev)
-                    n_imgs += X.shape[0]
-                    latent.append(model.reparam(*model.encode(X)))
-
-                    if n_imgs > 1000:
-                        break
-                latent = torch.cat(latent, dim=0)[:1000]
+            # n_imgs = 0
+            # latent = []
+            # with torch.no_grad():
+            #     for batch in test_iter:
+            #         X = batch[0].to(dev)
+            #         n_imgs += X.shape[0]
+            #         latent.append(model.reparam(*model.encode(X)))
+            #
+            #         if n_imgs > 1000:
+            #             break
+            #     latent = torch.cat(latent, dim=0)[:1000]
+            latent = torch.randn(size=(1000, N_LATENT), device=dev)
             generate_images(model.decoder, latent, save_path='sample/VAE/samples')
 
 

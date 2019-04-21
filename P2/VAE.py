@@ -72,7 +72,7 @@ class VAE(nn.Module):
 
     def reparam(self, mu, logvar):
         std = torch.exp(0.5*logvar)
-        eps = torch.rand_like(mu)
+        eps = torch.randn_like(mu)
 
         z = mu + eps * std
         return z
@@ -104,7 +104,7 @@ class TestVAE(unittest.TestCase):
 
     def test_flatten(self):
         flatten = Flatten()
-        rand_x = torch.rand(size=(10, 20, 30))
+        rand_x = torch.randn(size=(10, 20, 30))
         y = flatten(rand_x)
 
         self.assertEqual(y.shape, (10, 20*30))

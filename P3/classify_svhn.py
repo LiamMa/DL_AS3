@@ -15,7 +15,10 @@ image_transform = transforms.Compose([
 ])
 
 
-def get_data_loader(dataset_location, batch_size):
+def get_data_loader(dataset_location, batch_size, model='GAN'):
+    # if model == 'VAE':
+    #     image_transform = transforms.ToTensor()
+
     trainvalid = torchvision.datasets.SVHN(
         dataset_location, split='train',
         download=True,
