@@ -27,7 +27,7 @@ phi_=np.arange(-1,1.1,0.1)
 
 JSD_list=[]
 WD_list=[]
-
+WD_GP_list=[]
 for phi in phi_:
 
     # TODO: JSD-----------------------------------------------
@@ -44,14 +44,14 @@ for phi in phi_:
 
 
 
-    epochs=100000
+    epochs=50000
 
     print("Define probability 1 & 2")
     P1=samplers.distribution1(x=0)
     P2=samplers.distribution1(x=phi)
 
 
-    patience=10000
+    patience=20000
 
     # # TODO: ---- training
     print("------- training -------")
@@ -129,23 +129,12 @@ for phi in phi_:
 
     # MLP1.load_state_dict(state_dict)
 
-    # TODO:
     #
-    # -torch.log(torch.Tensor([2]).to(self.device)) - 1 / 2 * torch.mean(torch.log(input), dim=0)
     print("\n The maximize objective function:  %f"%objective)
 
     # Compute JSD
 
     JSD_list.append(objective)
-
-
-
-
-
-
-
-
-
 
 
 
@@ -246,14 +235,16 @@ for phi in phi_:
         loss = loss.item()
         total += targets.size(0)
 
-        if epoch%500==0:
+        if epoch%1000==0:
             print('phi: %f---[Epoch %d - Training] Objective_function=%f time: %f' % (phi,epoch, -loss, time.time() - tic))
-
         if -loss>objective:
             objective=-loss
             p_count=0
-            torch.save(MLP2.state_dict(), os.path.join(path_save, "WD_"+str(phi)))
+            # torch.save(MLP2.state_dict(), os.path.join(path_save, "WD_"+str(phi)))
             state_dict=MLP2.state_dict()
+            inputs_=inputs
+            targets_=targets
+            print('phi: %f---[Epoch %d - Training] Objective_function=%f time: %f' % (phi,epoch, -loss, time.time() - tic))
         else:
             p_count+=1
         if p_count>patience:
@@ -263,26 +254,10 @@ for phi in phi_:
 
     print("\n The maximize objective function:  %f"%objective)
 
-
+    WD_GP_list.append(objective)
     # Compute WD
 
 
-    MLP2.eval()
-
-    assert inputs.size() == targets.size()
-
-    if cuda_available:
-        inputs, targets, z = inputs.to(device), targets.to(device), z.to(device)
-
-    inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
-    T_x = MLP2.forward(inputs)
-    T_y = MLP2.forward(targets)
-
-
-    WD_value=torch.mean(T_x,dim=0)-torch.mean(T_y,dim=0)
-
-
-    WD_list.append(WD_value.item())
 
 
 print("JSD: ")
@@ -291,9 +266,10 @@ print("WD_GP: ")
 print(WD_list)
 
 JSD_axis=np.array(JSD_list)
-WD_axis=np.array(WD_list)
+WD_axis=np.array(WD_GP_list)
 
 np.save(os.path.join(path,"JSD_axis.npy"),JSD_axis)
 np.save(os.path.join(path,"WD_axis.npy"),WD_axis)
+
 
 print("Save npy done")
