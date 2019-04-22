@@ -68,12 +68,12 @@ class GAN(nn.Module):
             # 1
         )
 
-        for nm, w in self.generator.named_parameters():
-            if 'bias' not in nm:
-                nn.init.normal_(w, 0, 0.02)
-        for nm, w in self.discriminator.named_parameters():
-            if 'bias' not in nm:
-                nn.init.normal_(w, 0, 0.02)
+        # for nm, w in self.generator.named_parameters():
+        #     if 'bias' not in nm:
+        #         nn.init.normal_(w, 0, 0.02)
+        # for nm, w in self.discriminator.named_parameters():
+        #     if 'bias' not in nm:
+        #         nn.init.normal_(w, 0, 0.02)
 
     def forward(self, rand_x):
         pass

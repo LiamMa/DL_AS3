@@ -1,0 +1,22 @@
+04-22 01:53:08 - __main__ - INFO - Epoch 1, Loss: 212.2311, ELBO: -212.2311, Time: 23.2150
+04-22 01:53:30 - __main__ - INFO - Epoch 2, Loss: 140.4498, ELBO: -140.4498, Time: 22.3342
+04-22 01:53:52 - __main__ - INFO - Epoch 3, Loss: 121.9879, ELBO: -121.9879, Time: 22.2997
+04-22 01:54:15 - __main__ - INFO - Epoch 4, Loss: 113.9020, ELBO: -113.9020, Time: 22.4411
+04-22 01:54:37 - __main__ - INFO - Epoch 5, Loss: 109.5078, ELBO: -109.5078, Time: 22.3463
+04-22 01:54:59 - __main__ - INFO - Epoch 6, Loss: 106.6084, ELBO: -106.6084, Time: 22.5577
+04-22 01:55:22 - __main__ - INFO - Epoch 7, Loss: 104.3852, ELBO: -104.3852, Time: 22.7156
+04-22 01:55:45 - __main__ - INFO - Epoch 8, Loss: 102.6529, ELBO: -102.6529, Time: 22.4659
+04-22 01:56:07 - __main__ - INFO - Epoch 9, Loss: 101.3965, ELBO: -101.3965, Time: 22.5637
+04-22 01:56:30 - __main__ - INFO - Epoch 10, Loss: 100.3891, ELBO: -100.3891, Time: 22.3558
+04-22 01:56:52 - __main__ - INFO - Epoch 11, Loss: 99.4824, ELBO: -99.4824, Time: 22.5076
+04-22 01:57:15 - __main__ - INFO - Epoch 12, Loss: 98.7618, ELBO: -98.7618, Time: 22.5946
+04-22 01:57:37 - __main__ - INFO - Epoch 13, Loss: 98.1920, ELBO: -98.1920, Time: 22.7051
+04-22 01:58:00 - __main__ - INFO - Epoch 14, Loss: 97.6702, ELBO: -97.6702, Time: 22.3118
+04-22 01:58:23 - __main__ - INFO - Epoch 15, Loss: 97.1501, ELBO: -97.1501, Time: 22.9824
+04-22 01:58:45 - __main__ - INFO - Epoch 16, Loss: 96.7221, ELBO: -96.7221, Time: 22.2430
+04-22 01:59:07 - __main__ - INFO - Epoch 17, Loss: 96.2968, ELBO: -96.2968, Time: 22.5050
+04-22 01:59:30 - __main__ - INFO - Epoch 18, Loss: 95.9884, ELBO: -95.9884, Time: 22.4530
+04-22 01:59:52 - __main__ - INFO - Epoch 19, Loss: 95.6032, ELBO: -95.6032, Time: 22.5264
+04-22 02:00:15 - __main__ - INFO - Epoch 20, Loss: 95.2824, ELBO: -95.2824, Time: 22.6607
+04-22 02:04:24 - __main__ - INFO - Valid, Avg Loss: 95.6994, Avg ELBO: -95.6994, Avg Log(px): -84.9078, Time: 249.3505
+04-22 02:08:35 - __main__ - INFO - Test, Avg Loss: 94.9164, Avg ELBO: -94.9164, Avg Log(px): -84.2043, Time: 250.0887
