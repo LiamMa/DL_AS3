@@ -1,3 +1,7 @@
+"""
+The architecture is adapted from DCGAN
+https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
