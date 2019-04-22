@@ -30,44 +30,6 @@ class GAN(nn.Module):
         self.n_latent = n_latent
         self.nc = 32
 
-        # # generator input should be: B x n_latent
-        # self.generator = nn.Sequential(
-        #     # n_latent
-        #     nn.Linear(self.n_latent, 128 * 4 * 4),
-        #     nn.ELU(),
-        #     Reshape((128, 4, 4)),
-        #     # 128 x 4 x 4
-        #     nn.ConvTranspose2d(128, 64, 4, 2, 1),
-        #     nn.BatchNorm2d(64),
-        #     nn.ELU(),
-        #     # 64 x 8 x 8
-        #     nn.ConvTranspose2d(64, 32, 4, 2, 1),
-        #     nn.BatchNorm2d(32),
-        #     nn.ELU(),
-        #     # 32 x 16 x 16
-        #     nn.ConvTranspose2d(32, 3, 4, 2, 1),
-        #     # 3 x 32 x 32
-        #     nn.Tanh()
-        # )
-        # # discriminator input should be: B x 3 x 32 x 32
-        # self.discriminator = nn.Sequential(
-        #     # 3 x 32 x 32
-        #     nn.Conv2d(3, 32, 4, 2, 1),
-        #     nn.ELU(),
-        #     # 32 x 16 x16
-        #     nn.Conv2d(32, 64, 4, 2, 1),
-        #     nn.BatchNorm2d(64),
-        #     nn.ELU(),
-        #     # 64 x 8 x 8
-        #     nn.Conv2d(64, 128, 4, 2, 1),
-        #     nn.BatchNorm2d(128),
-        #     nn.ELU(),
-        #     # 128 x 4 x 4
-        #     nn.Conv2d(128, 1, 4, 1, 0),
-        #     Flatten(),
-        #     # nn.Sigmoid()
-        #     # 1
-        # )
         # generator input should be: B x n_latent
         self.generator = nn.Sequential(
             # n_latent

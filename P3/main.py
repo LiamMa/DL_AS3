@@ -44,8 +44,8 @@ SAMPLE_PATH = '{}/samples'.format(args.model)
 
 dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 N_LATENT = 100
-LR_G = 0.0001
-LR_D = 0.0001
+LR_G = 0.0002
+LR_D = 0.0002
 LR_VAE = 1e-3
 beta1 = 0.5
 LAMBDA = 10
