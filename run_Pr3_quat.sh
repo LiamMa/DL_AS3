@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+cd P3
 # generate samples  ---  VAE
 
 python main.py --mode test --model VAE --batch_size 8 --load_model
