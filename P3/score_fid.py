@@ -150,39 +150,6 @@ def calculate_fid_score(sample_feature_iterator,
     print(np.trace(sigma2))
     print(2 * tr_covmean)
 
-    #
-    #
-    #
-    # p=torch.Tensor(next(sample_feature_iterator))
-    # q=torch.Tensor(next(testset_feature_iterator))
-    #
-    # p=p.view(p.size(0),-1)
-    # q=q.view(q.size(0),-1)
-    #
-    # mu_p=torch.mean(p,dim=0)
-    # mu_q=torch.mean(q,dim=0)
-    #
-    # mu_p,_=torch.broadcast_tensors(mu_p,p)
-    # mu_q,_=torch.broadcast_tensors(mu_q,q)
-    #
-    # cov_p=torch.mm(p-mu_p,(p-mu_p).transpose(0,1))
-    # cov_q=torch.mm(q-mu_q,(q-mu_q).transpose(0,1))
-    # sq=torch.mm(cov_p,cov_q)
-    # sq=torch.clamp(sq,min=0)
-    #
-    # print(sq.size())
-    #
-    #
-    # # TODO: bug---the sqrt of negative leads to nan
-    #
-    # d=torch.norm(mu_p-mu_q,p=2)**2 +torch.trace(cov_p)+torch.trace(cov_q)-2*torch.trace(torch.sqrt(sq))
-    # print(torch.norm(mu_p-mu_q,p=2)**2)
-    # print(torch.trace(cov_p))
-    # print(torch.trace(cov_q))
-    # print(2*torch.trace(torch.sqrt(sq)))
-    #
-    #
-    # print(cov_p)
 
     return d2
     

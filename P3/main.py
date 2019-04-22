@@ -110,6 +110,8 @@ def test_vae(model, test_iter, fixed_noise, epoch):
     recons_x = y[:16]
     all_x = torch.cat((sample_x, recons_x), dim=0).cpu()
     all_x = utils.de_normalize(all_x)
+    if not os.path.exists("figure"):
+        os.mkdir("figure")
     save_image(all_x, 'figure/P3_VAE_Epoch_{}_test_reconstructions.png'.format(epoch), padding=2)
 
     # generate new images

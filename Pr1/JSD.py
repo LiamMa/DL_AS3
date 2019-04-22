@@ -26,12 +26,7 @@ class JSDLoss(_Loss):
 
 
     def forward(self,input,target):
-        loss_=-torch.log(torch.Tensor([2]))-1/2*torch.mean(torch.log(input),dim=-1)-1/2*torch.mean(torch.log(1-target),dim=-1)
-
-        if self.reduction=="mean":
-            loss=torch.mean(loss_)
-        else:
-            loss=torch.sum(loss_)
+        loss=-torch.log(torch.Tensor([2]).to(self.device))-1/2*torch.mean(torch.log(input),dim=0)-1/2*torch.mean(torch.log(1-target),dim=0)
 
         return loss
 #
